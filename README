@@ -1,0 +1,7 @@
+This program reads info from a makefile (can be specified with -f) and executes specified commands in order.
+We parse the makefile (in parser.c) into a node structure that we use to traverse targets and execute them in correct order.
+representation.c specifies the nodes structure and creates nodes.
+build_specs.c connects and traverses the nodes to find the correct build order.
+create_exec.c executes commands.
+
+Thanks for grading!
