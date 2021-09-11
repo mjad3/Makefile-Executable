@@ -1,20 +1,22 @@
 CC = gcc
 CFLAGS = -Wall -g
-EXEC = 537pfsim-fifo 537pfsim-lru 537pfsim-clock
+EXE = 537make
+OBJECTS = build_specs.o create_exec.o representation.o parser.o
 
-program:
-	$(CC) $(CFLAGS) -o 537pfsim-fifo main.c fifo.c funcs.c
-	$(CC) $(CFLAGS) -o 537pfsim-lru main.c lru.c funcs.c
-	$(CC) $(CFLAGS) -o 537pfsim-clock main.c clock.c funcs.c
+537make: build_specs.o create_exec.o representation.o parser.o
+	$(CC) $(CFLAGS) -o $(EXE) main.c $(OBJECTS)
 
-537pfsim-fifo: replacement.h funcs.h
-	$(CC) $(CFLAGS) -o 537pfsim-fifo main.c fifo.c funcs.c
+#Second Layer
+build_specs.o: create_exec.h representation.h
+	$(CC) $(CFLAGS) -c build_specs.c
+create_exec.o: parser.h representation.h
+	$(CC) $(CFLAGS) -c create_exec.c
 
-537pfsim-lru: replacement.h funcs.h
-	$(CC) $(CFLAGS) -o 537pfsim-lru main.c lru.c funcs.c
-
-537pfsim-clock: replacement.h funcs.h
-	$(CC) $(CFLAGS) -o 537pfsim-clock main.c clock.c funcs.c
+# Base Files
+representation.o:
+	$(CC) $(CFLAGS) -c representation.c
+parser.o:
+	$(CC) $(CFLAGS) -c parser.c
 
 clean:
-	rm *.o $(EXEC)
+	rm $(OBJECTS) $(EXE)

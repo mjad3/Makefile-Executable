@@ -1,211 +1,245 @@
 /////////////////////////////////////////////////////////////
 // CS 537, Fall 2020
-// Program 4, Page Replacement Simulator
+// Program 3, 537make
 // Michael Sachen, 9073631716, sachen
 // Matt Jadin, 9065235468, jadin
 /////////////////////////////////////////////////////////////
-#define _GNU_SOURCE
+
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
 #include <unistd.h>
-#include <string.h>
-#include <time.h>
-#include <search.h>
-#include "replacement.h"
-#include "funcs.h"
-// Number of page frames in memory == memory size/ page size
-int frames;
+#include <ctype.h>
+#include "representation.h"
+#include "parser.h"
+#include "build_specs.h"
 
+int main(int argc, char * argv[]) {
+  // Acceptable Input Strings
+  char * make_file = "./makefile";
+  char * Make_file = "./Makefile";
+  char * target = "";
+  int m = 0; //keeps track of whether or not we found a makefile
+  // Look for -f here
+  int f_spot = 0;
+  if (argc > 4) {
+    fprintf(stderr, "Too many arguments, use target name, and/or -f with makefile name\n");
+    exit(1);
+  }
+  FILE * file;
+  //check for -f flag and specified makefile
+  for (int x = 0; x < argc; x++) {
+    if (strcmp(argv[x], "-f") == 0) {
+      if (access(argv[x + 1], F_OK) != -1) {
+        file = fopen(argv[x + 1], "r");
+        m = 1;
+        f_spot = x;
 
-// Main Driver
-int main(int argc, char *argv[])	{
-  long int * fileEnd = malloc(sizeof(long int));
-  
-  struct process * p_arr[50];
-  // Open File
-	FILE * file = fopen(argv[1], "r");
-  
-  long int * counter = malloc(sizeof(long int));
-  int * spot = malloc(sizeof(int)); //tracks number of PIDs
-  int page_size = 4096; // Size of frame in Bytes
-	int mem_size = 1; // Size of memory in MB
-  //arg parsing
-  int arg = 0;
-	while ((arg = getopt(argc, argv, "pm")) != -1)	{
-		switch(arg)	{
-			case 'p':
-          printf("%d", arg);
-					page_size = arg;
-				break;
-			case 'm':
-          printf("%d", arg);
-					mem_size = arg;
-				break;
-		}
-	}
-  
-  frames = mem_size*(1000000)/page_size;
-  init(frames);
-	
-
-  
-  //stats variables
-  long int AMU = 0;
-	long int ARP = 0;
-	long int TPI = 0;		
-	unsigned long int clock = 0; //global clock in ns
-
-	// First File Iteration
-	// -----------------------------------------------------------------------
-	 
-  firstPass(file, counter, spot, p_arr, fileEnd);                                                                                                                                                          
-	
-	for (int x = 0; x < *spot; x++) { 
-			printf("pid: %d start: %ld end: %ld\n", p_arr[x] -> pid, p_arr[x] -> start, p_arr[x] -> end);
-	}
-	
-	rewind(file);
-	
-
-  long int memref = 0;
-
-	// End of First Pass
-	// -----------------------------------------------------------------------
-	// Start of Second Pass
-	char line[100];
-	while (fgets(line, sizeof(line), file)) {
-
-		  // Setting up vars for iterators
-    	long int lineStart = ftell(file) - strlen(line);
-    	char * p = calloc(1, sizeof(char) * 10); //pid
-    	char * v = calloc(1, sizeof(char) * 10);  //vpn
-    	int d = 0;  //for keeping track of place of char in string
-    	int z = 0; //tracks seperation of pid and vpn in line
-    	char t;
-
-    	//parse pid and vpn of line
-    	for (int x = 0; x < strlen(line); x++) {
-      		t = line[x];
-      		if (t == EOF || t == '\n') break;
-      		if ((t == ' ' || t == '\t') && z == 1) {
-        		z++;
-        		d = 0;}
-      		if (t != ' ' && t != '\t') {
-				if (z <= 1) {
-          		p[d] = t;
-          		d++;
-          		z = 1;
-        	} else if (z > 1) {
-          		v[d] = t;
-          		d++;}
-      		}
-      	}
-
-      	// Set up more vars
-    	
-    	int pid = atoi(p);
-    	int vpn = atoi(v);
-    	
-      
-    	// find matching pid
-    	for (int x = 0; x < *spot; x++) {
-   		  if (p_arr[x] -> pid == pid) {
-          
-        	// And if the process is runnable
-        	if (p_arr[x] -> time <= clock && p_arr[x] -> start == lineStart) {         
-          		
-          		
-          		// Run the Process --> This passes the paramaters to our algorihtm
-          		int t = run(vpn, &(p_arr[x] -> root), p_arr[x]->ready); 
-              clock++;
-              //update AMU
-          		AMU += size;             
-              //update ARP
-          		for (int j = 0; j < (*spot); j++) {
-              		if(p_arr[j]->time <= clock && p_arr[j]->pid != -1) ARP++;
-          		}
-          		// If the process gets blocked/page fault (data structure is full and has to goto i.o)
-          		if (t == 1) {
-             
-            		TPI++;
-            		//set new start point for process && set ready for io
-            		p_arr[x] -> start = lineStart;
-            		p_arr[x] -> ready = 1;
-            		//finds next available time slot in io queue
-            		long int maxTime = clock;
-
-            		for (int j = 0; j < *spot; j++) {
-              			if (p_arr[j] -> time > maxTime) maxTime = p_arr[j] -> time;
-            		}
-            		p_arr[x] -> time = maxTime + 2000000; // increment time for io for this process
-               
-               
-            
-          		} else { // no fault... does not have to increment i.o.
-               memref++;
-            		p_arr[x] -> start = ftell(file);
-            		if (p_arr[x] -> end <= p_arr[x] -> start && p_arr[x]->pid != -1){
-                  p_arr[x]->pid = -1;
-             			deleteTree(p_arr[x] -> root);
-            		}
-            		p_arr[x]->ready = 0;
-              }
-        	}
-        }
-    	}	
-      
-    	
-      for (int x = 0; x < *spot; x++) {
-        	if((p_arr[x]->pid != pid) && p_arr[x]->start == lineStart){
-             p_arr[x]->start = ftell(file);
-             if(p_arr[x]->start >= p_arr[x]->end){
-                removeProc(p_arr[x]);                
-              }
-          }	
-   		}
-
-    	//switch to runnable process, move line pointer to its start        
-    	long int min = *fileEnd; //init minimum start point to eof for comparison
-    	int runnable = -2; 
-    	int pTime; //index of process with next io time ending
-    	long int minTime = clock + 2000000; // sets min possible time of next io completion
-     	
-     	// For each process
-    	for (int j = 0; j < *spot; j++) {
-      		// If the process time is less than the next low time, set time slot to jump to
-      		// Or find earliest runnable process in trace file
-      		if (p_arr[j] -> time <= clock && p_arr[j] -> start < min) { 
-        		min = p_arr[j] -> start;        		
-        		runnable = j;
-      		}else if (p_arr[j] -> time <= minTime && p_arr[j] -> start < min) {
-        		minTime = p_arr[j] -> time;
-        		pTime = j;
-      		}
-    	} // If none are runnable
-
-    	if (runnable == -2) {
-      		
-          if(p_arr[pTime] -> start < *fileEnd){
-            AMU += ((minTime - clock - 1) * size);
-      		  // increment clock, jump to process
-            clock = minTime;   		
-      		  fseek(file, p_arr[pTime] -> start, SEEK_SET);
-          }
-    	} else { 
-      		//next proc is p_arr[runnable];      		
-      		fseek(file, p_arr[runnable]->start, SEEK_SET);
-    	}	
-  	}
-   // End of Second Pass
-	 // -----------------------------------------------------------------------
-
-  	float a = ((float)AMU/(float)frames)/((float)clock);
-  	float r = (float)ARP/clock;
-  	printf("AMU: %f, ARP: %f, TMR: %ld, TPI: %ld, RTime: %ld\n", a, r, *counter, TPI, clock);
-    //free binary tree
-    for (int j = 0; j < *spot; j++) {
-     tdestroy(p_arr[j]->root, free); 
+      } else {
+        fprintf(stderr, "Could not find specified makefile\n");
+        exit(1);
+      }
     }
-	
-	return 0;
+  }
+  
+  //Check for specified target  
+  if ((f_spot == 2 || f_spot == 0) && argv[1] != NULL) {
+    target = argv[1];
+  } else if (f_spot == 1 && argv[3] != NULL) {
+    target = argv[3];
+  }
+
+  if (access(Make_file, F_OK) != -1 && m == 0) {
+    file = fopen(Make_file, "r");
+    m = 1;
+  } else if (access(make_file, F_OK) != -1 && m == 0) {
+    file = fopen(make_file, "r");
+    m = 1;
+  }
+
+  // Look for file in current directory
+  if (m == 1) {
+    // Set up File Reader
+
+    int input_size = 4096;
+    char line[input_size];
+
+    // Iterate to find number of targets
+    int targ_count = 0;
+    while (fgets(line, sizeof(line), file)) {
+
+      if (line[0] == '#') continue;
+      if (is_target(line) == 1) {
+        targ_count++;
+      }
+    }
+    // Reset Pointer
+    rewind(file);
+
+    // Create data structure for Nodes with number of targets
+    struct node * n_arr[targ_count];
+
+    // Set Target
+    // Cycle through file
+    int j = -1;
+    int lineNum = 1;
+    char temp[input_size];
+    while (fgets(line, sizeof(line), file)) {
+      // Check Line Length
+      fgets(temp, sizeof(line), file);
+      if (strlen(line) >= input_size - 1) {
+        fprintf(stderr, "Line too long\n");
+        exit(1);
+      }
+
+      // Check for comments
+      if (line[0] == '#') {
+        lineNum++;
+        continue;
+      }
+
+      //Check for null byte in line
+      //char c;
+      //while ((c = fgetc(file)) != '\n' && c != EOF) {
+      //if(c == '\0')
+      //}
+
+      //char* c = line;
+      // while (*c) putchar(*c++);
+      lineNum++;
+      char t;
+      for (int x = 0; x < sizeof(line); x++) {
+
+        t = line[x];
+
+        if (t == '\0') {
+          if (fgets(temp, sizeof(line), file)) {
+            fprintf(stderr, "%d: Null byte found: exiting\n", lineNum);
+            exit(1);
+          }
+        }
+        if (t == EOF || t == '\n') break;
+
+      }
+
+    }
+    rewind(file);
+    lineNum = 1; //double check this
+
+    while (fgets(line, sizeof(line), file)) {
+      //Check for comments, ignore them
+      if (line[0] == '#') {
+        lineNum++;
+        continue;
+      }
+      // If Line is a Target
+      if (is_target(line) == 1) {
+        // Get all dependencies
+        char deps[strlen(line)];
+        snprintf(deps, strlen(line), "%s", line);
+        char * token;
+        token = strtok(deps, ":");
+        j++;
+        // Add Node to Data Structure
+        n_arr[j] = CreateNode();
+
+        // Trim Trailing space           
+        strcpy(n_arr[j] -> target_name, removeWhiteSpace(token));
+
+        // This is our dependencies as a char array
+        // Set up Node
+        if ((token = strtok(NULL, "/")) != NULL) {
+          while (isspace((unsigned char) * token)) token++;
+          char ** dep_array = malloc((4096 / 3) * sizeof(char));
+          if (dep_array == NULL) {
+            fprintf(stderr, "malloc error\n");
+            exit(1);
+          }
+          n_arr[j] -> dsize = splitter(token, dep_array, lineNum);
+          n_arr[j] -> depends = dep_array;
+        }
+      }
+      // If Line is a Command
+      else if (line[0] == '\t') {
+
+        //check for tab
+        if (n_arr[j] -> csize >= sizeof(n_arr[j] -> commands)) {
+          char** temp = malloc(sizeof(char*) * (n_arr[j] -> csize * 2));
+          for(int y = 0; y < n_arr[j] -> csize; y++){
+            temp[y] = n_arr[j] -> commands[y];
+          }
+          n_arr[j] -> commands = temp;
+        }
+
+        line[0] = ' ';
+
+        n_arr[j] -> commands[n_arr[j] -> csize] = malloc(sizeof(char) * input_size);
+        if (n_arr[j] -> commands[n_arr[j] -> csize] == NULL) {
+          fprintf(stderr, "malloc error\n");
+          exit(1);
+        }
+        strcpy(n_arr[j] -> commands[n_arr[j] -> csize], line);
+        n_arr[j] -> csize++;
+      }
+
+      // If Line is not a command target or blank i.e. an Error
+      else if (line[0] != '\0' && line[0] != '\n' && line[0] != EOF) {
+        //if line is not blank, throw error
+        fprintf(stderr, "%d: Error: nonblank line withough target or tab\n", lineNum);
+        exit(1);
+      }
+
+      // Increment Line number
+      lineNum++;
+    } // END OF MAIN WHILE LOOP
+
+    //build list of Targets for a node
+
+    char ** tlist = malloc(targ_count * sizeof(char * ));
+    if (tlist == NULL) {
+      fprintf(stderr, "malloc error\n");
+      exit(1);
+    }
+
+    tlist = buildList(n_arr, targ_count);
+
+    //lets us start from different user specified target
+    int start = 0;
+    for (int x = 0; x < targ_count; x++) {
+      if (strcmp(target, tlist[x]) == 0) {
+        start = x;
+      }
+    }
+
+    // Check if targets exist
+    if (strcmp(target, "clean") != 0) {
+      for (int x = 0; x < targ_count; x++) {
+        checkTargets(n_arr, n_arr[x], tlist, targ_count);
+      }
+    }
+    // If this is the target we want lets execute code
+    checkDeps(tlist, n_arr[start], n_arr);
+
+    for (int x = 0; x < targ_count; x++) {
+
+      if (n_arr[x] -> target_name != NULL) free(n_arr[x] -> target_name);
+      for (int j = 0; j < n_arr[x] -> dsize; j++) {
+        if (n_arr[x] -> depends[j] != NULL) free(n_arr[x] -> depends[j]);
+      }
+      for (int y = 0; y < n_arr[x] -> csize; y++) {
+        if (n_arr[x] -> commands[y] != NULL) free(n_arr[x] -> commands[y]);
+      }
+      if (n_arr[x] != NULL) free(n_arr[x]);
+    }
+
+    // Close File
+    fclose(file);
+  } else {
+    fprintf(stderr, "Makefile not found\n");
+    exit(1);
+  }
+
+  // Program finishes within expected bounds
+  return 0;
 }
